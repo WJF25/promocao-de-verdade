@@ -1,0 +1,8 @@
+{:db-host #env DB_HOST
+ :db-port #long #env DB_PORT
+ :db-user #env DB_USER
+ :db-password #env DB_PASSWORD
+ :db-name #profile {:dev "preco_historico_dev"
+                    :test "preco_historico_test"}
+ :http-port #long #or [#env HTTP_PORT "3000"]
+ :secret #or [#env JWT_SECRET "minha-chave-super-secreta-e-longa-123"]}
