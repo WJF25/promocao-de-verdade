@@ -3,7 +3,7 @@
    [buddy.hashers :as hashers]
    [buddy.sign.jwt :as jwt]
    [clojure.string :as st]
-   [tick.core :as t]))
+   [java-time.api :as jt]))
 
 (def ^:private bcrypt-alg :bcrypt+sha512)
 
@@ -26,9 +26,8 @@
 (defn- exp-time
   "Calcula o timestamp de expiração (24 horas a partir de agora)."
   []
-  (-> (t/now)
-      (t/>> (t/new-duration 24 :hours))
-      (t/inst)))
+  (-> (jt/instant)
+      (jt/plus (jt/hours 24))))
 
 (defn create-token
   "Gera um JWT assinado com os dados do usuário.

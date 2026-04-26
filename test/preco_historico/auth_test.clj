@@ -3,7 +3,7 @@
             [clojure.string :as st]
             [buddy.sign.jwt :as jwt]
             [preco-historico.auth :as auth]
-            [tick.core :as t]))
+            [java-time.api :as jt]))
 
 (deftest hash-password-test
   (testing "hash-password retorna uma string de hash (bcrypt) diferente da senha pura"
@@ -55,9 +55,7 @@
 
     (testing "unsign-token retorna nil para um token expirado"
       (let [;; Criamos um tempo de expiração que foi há 1 hora atrás
-            expired-at (-> (t/now)
-                           (t/<< (t/new-duration 1 :hours))
-                           (t/inst))
+            expired-at (jt/minus (jt/instant) (jt/hours 1))
 
             ;; Criamos o payload manualmente com essa data retroativa
             payload {:user_id (:id user)
