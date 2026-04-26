@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: preco-historico-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-preco-historico}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  app:
+    # Usando a sua imagem customizada
+    image: ney/crojuru
+    container_name: crojuru
+    # O diretório de trabalho reflete o seu mapeamento
+    working_dir: /home/app-user/work
+    volumes:
+      # O "." no compose é o equivalente ao "$(pwd)" do bash
+      - .:/home/app-user/work
+    ports:
+      - "7888:7888"
+      - "3000:3000"
+      - "5678:5678"
+    env_file:
+      - src/preco_historico/.env
+    # Substituímos o "bash" pelo processo que manterá o container vivo e o REPL escutando
+    command: lein repl :headless
+    depends_on:
+      - db
+
+volumes:
+  pgdata:
