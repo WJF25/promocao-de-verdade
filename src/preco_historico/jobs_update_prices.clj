@@ -26,6 +26,9 @@
         {:url url :status :skipped :reason "Já atualizado hoje"}
         {:url url :status :error :msg (ex-message e)}))))
 
+(defn put-to-sleep-seconds [seconds]
+  (Thread/sleep (* 1000 seconds)))
+
 (defn run-update-prices-job
   "Varre o banco e atualiza todos os preços monitorados."
   [datasource]
@@ -33,7 +36,7 @@
     (println (str "Iniciando Job de atualização para " (count products) " produtos..."))
     (let [results (mapv (fn [product]
                           (let [res (update-product-price! datasource product)]
-                            (Thread/sleep 2000)
+                            (put-to-sleep-seconds 1)
                             res))
                         products)]
       (tap> {:job "update-prices" :results results})
@@ -41,9 +44,16 @@
 
 (defn start-scheduler! [datasource]
   (println "Iniciando agendador de preços (Chime)...")
-  (let [now (ZonedDateTime/now (ZoneId/of "America/Sao_Paulo"))
-        ;; Define para rodar todos os dias às 03:00 da manhã
-        schedule (chime/periodic-seq (.toInstant (.with (ZonedDateTime/now) (LocalTime/of 3 0)))
+  (let [sp-zone (ZoneId/of "America/Sao_Paulo")
+        now (ZonedDateTime/now sp-zone)
+        hoje-as-tres (jt/zoned-date-time (jt/local-date now)
+                                         (jt/local-time 3 0)
+                                         sp-zone)
+        ;; Se já passou das 3h, começa amanhã. Se não, começa hoje.
+        primeira-exec (if (jt/after? now hoje-as-tres)
+                        (jt/plus hoje-as-tres (jt/days 1))
+                        hoje-as-tres)
+        schedule (chime/periodic-seq (jt/instant primeira-exec)
                                      (jt/period 1 :days))]
     (chime/chime-at schedule
                     (fn [time]
