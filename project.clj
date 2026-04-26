@@ -7,6 +7,7 @@
                  [buddy/buddy-auth "3.0.323"]
                  [buddy/buddy-hashers "2.0.167"]
                  [buddy/buddy-sign "3.5.351"]
+                 [chime "0.3.3"]
                  [clj-http "3.12.3"]
                  [com.github.seancorfield/next.jdbc "1.3.1048"]
                  [com.layerware/hugsql "0.5.3"]

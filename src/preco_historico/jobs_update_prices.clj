@@ -1,8 +1,13 @@
 (ns preco-historico.jobs-update-prices
   (:require
    [clojure.string :as st]
+   [chime.core :as chime]
+   [java-time.api :as jt]
+   [preco-historico.config :as config]
+   [preco-historico.db :as db]
    [preco-historico.price-log :as price-log]
-   [preco-historico.scraper :as scraper]))
+   [preco-historico.scraper :as scraper])
+  (:import [java.time LocalTime ZonedDateTime ZoneId]))
 
 (defn update-product-price!
   "Lógica individual para atualizar um único produto."
@@ -33,3 +38,32 @@
                         products)]
       (tap> {:job "update-prices" :results results})
       results)))
+
+(defn start-scheduler! [datasource]
+  (println "Iniciando agendador de preços (Chime)...")
+  (let [now (ZonedDateTime/now (ZoneId/of "America/Sao_Paulo"))
+        ;; Define para rodar todos os dias às 03:00 da manhã
+        schedule (chime/periodic-seq (.toInstant (.with (ZonedDateTime/now) (LocalTime/of 3 0)))
+                                     (jt/period 1 :days))]
+    (chime/chime-at schedule
+                    (fn [time]
+                      (println "Executando Job agendado em:" time)
+                      (run-update-prices-job datasource))
+                    {:error-handler (fn [e]
+                                      (println "Erro no agendador:" (ex-message e))
+                                      true)})))
+
+(defn -main [& args]
+  (println "### INICIANDO JOB DE PREÇOS ###")
+  (let [cfg (config/load-config)
+        ds (db/make-datasource cfg)]
+    (try
+      (let [results (run-update-prices-job ds)]
+        (println "\n### RESUMO DO JOB ###")
+        (println "Total processado:" (count results))
+        (println "Sucessos:" (count (filter #(= :success (:status %)) results)))
+        (println "Falhas/Pulos:" (count (filter #(not= :success (:status %)) results))))
+      (finally
+        ;; Importante fechar conexões ou garantir a saída do processo
+        (println "Encerrando...")
+        (shutdown-agents)))))
