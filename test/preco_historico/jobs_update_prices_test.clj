@@ -6,7 +6,9 @@
             [preco-historico.scraper :as scraper]
             [preco-historico.jobs-update-prices :as jobs]
             [preco-historico.api-test :refer [api-fixture *test-ds*]]
-            [cheshire.core :as json]))
+            [cheshire.core :as json]
+            [chime.core :as chime]
+            [java-time.api :as jt]))
 
 (use-fixtures :each api-fixture)
 
@@ -33,7 +35,9 @@
       ;; 2. Rodamos o Job mockando o scraper para retornar um preço novo
       (with-redefs [scraper/get-selectors (fn [_] {:name "h1"})
                     scraper/fetch-product-data (fn [u _]
-                                                 {:product_name "Teste02" :site_name "Amazon" :price_cash 100.0 :url u :price_original 110.0 :price_installment 130.0 :max_installments 10})]
+                                                 {:product_name "Teste02" :site_name "Amazon" :price_cash 100.0 :url u :price_original 110.0 :price_installment 130.0 :max_installments 10})
+                    println (fn [& _] nil)
+                    jobs/put-to-sleep-seconds (fn [_] nil)]
         (let [results (jobs/run-update-prices-job *test-ds*)]
           (is (= 1 (count results)))
           (is (= :success (:status (first results))))
@@ -53,7 +57,9 @@
                                             :url url2
                                             :user_id user-id})
 
-      (with-redefs [scraper/get-selectors (fn [_] nil)]
+      (with-redefs [scraper/get-selectors (fn [_] nil)
+                    jobs/put-to-sleep-seconds (fn [_] nil)
+                    println (fn [& _] nil)]
         (let [results (jobs/run-update-prices-job *test-ds*)]
           (is (= 2 (count results)))
           (is (= :failed (:status (last results))))
@@ -84,7 +90,9 @@
                                                   :price_installment 930.0
                                                   :max_installments 10
                                                   :url url2
-                                                  :user_id user-id})]
+                                                  :user_id user-id})
+                    jobs/put-to-sleep-seconds (fn [_] nil)
+                    println (fn [& _] nil)]
         (let [results (jobs/run-update-prices-job *test-ds*)]
           (is (= 2 (count results)))
           (is (= :skipped (:status (last results))))
@@ -95,7 +103,9 @@
 
     (testing "Falha: Falha no scraper"
       (with-redefs [scraper/get-selectors (fn [_] {:name "h1"})
-                    scraper/fetch-product-data (fn [_ _] nil)]
+                    scraper/fetch-product-data (fn [_ _] nil)
+                    jobs/put-to-sleep-seconds (fn [_] nil)
+                    println (fn [& _] nil)]
         (let [results (jobs/run-update-prices-job *test-ds*)]
           (is (= 2 (count results)))
           (is (= :failed (:status (last results))))
@@ -115,7 +125,9 @@
                                             :user_id user-id})
       (with-redefs [scraper/get-selectors (fn [_] {:name "h1"})
                     scraper/fetch-product-data (fn [_ _]
-                                                 (throw (Exception. "Anuncio removido")))]
+                                                 (throw (Exception. "Anuncio removido")))
+                    jobs/put-to-sleep-seconds (fn [_] nil)
+                    println (fn [& _] nil)]
         (let [results (jobs/run-update-prices-job *test-ds*)]
           (is (= 3 (count results)))
           (is (= :error (:status (last results))))
@@ -125,7 +137,38 @@
             (is (= 4 (count history)))))))
 
     (testing "Sucesso: O Job deve pular lojas não suportadas sem travar"
-      (with-redefs [scraper/get-selectors (fn [_] nil)]
+      (with-redefs [scraper/get-selectors (fn [_] nil)
+                    jobs/put-to-sleep-seconds (fn [_] nil)
+                    println (fn [& _] nil)]
         (let [results (jobs/run-update-prices-job *test-ds*)]
           (is (= :failed (:status (first results))))
           (is (= "Loja não suportada" (:reason (first results)))))))))
+
+
+
+(deftest scheduler-config-test
+  (testing "Sucesso:Configuração e inicialização do Chime"
+    (let [chime-started (atom false)]
+      (with-redefs [chime/chime-at (fn [schedule _ options]
+                                     (reset! chime-started true)
+                                     ;; Verifica se o schedule é uma sequência de horários
+                                     (is (seq? schedule))
+                                     ;; Garante que o tratador de erro foi definido
+                                     (is (fn? (:error-handler options)))
+                                     (fn [] :closed))
+                    println (fn [& _] nil)
+                    jobs/run-update-prices-job (fn [_] (println "Mock: Job não executado"))]
+        (jobs/start-scheduler! *test-ds*)
+        (is @chime-started "O agendador Chime deveria ter sido disparado"))))
+
+  (testing "Resiliência do Error Handler do agendador"
+    (let [captured-handler (atom nil)]
+      (with-redefs [chime/chime-at (fn [_ _ options]
+                                     (reset! captured-handler (:error-handler options))
+                                     (fn [] :closed))
+                    jobs/run-update-prices-job (fn [_] (println "Mock: Job não executado"))
+                    println (fn [& _] nil)]
+        (jobs/start-scheduler! *test-ds*)
+        (let [handler @captured-handler]
+          (is (handler (Exception. "Simulação de falha no banco")))
+          (is (= true (handler (Exception. "Outra falha")))))))))
