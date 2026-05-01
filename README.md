@@ -3,8 +3,8 @@
 Um ecossistema robusto em **Clojure** para monitoramento e análise de preços de e-commerce brasileiro. O projeto combina web scraping inteligente, persistência em PostgreSQL e automação de tarefas.
 
 ## ✨ Destaques
-- **Scraper Resiliente**: Extração de dados via Jsoup para Amazon, Mercado Livre e Magazine Luiza[cite: 11, 14].
-- **Cobertura de Testes**: >95% de forms cobertos, garantindo estabilidade em cada handler e serviço[cite: 22].
+- **Scraper Resiliente**: Extração de dados via Jsoup para Amazon, Mercado Livre e Magazine Luiza.
+- **Cobertura de Testes**: >95% de forms cobertos, garantindo estabilidade em cada handler e serviço.
 * **Automação (Jobs)**: Robô integrado para atualização diária de preços sem intervenção humana.
 * **Segurança**: Autenticação via JWT e validação de esquemas rigorosa com Malli.
 
@@ -20,8 +20,8 @@ Este projeto serviu para explorar bibliotecas específicas do ecossistema Clojur
 
 ## 🛠 Tech Stack
 - **Linguagem**: Clojure (Leiningen) 
-- **Banco de Dados**: PostgreSQL + HugSQL [cite: 1, 20]
-- **Parsing HTML**: Jsoup [cite: 5, 17]
+- **Banco de Dados**: PostgreSQL + HugSQL
+- **Parsing HTML**: Jsoup
 * **Roteamento**: Reitit + Ring
 
 ## 🚀 Como Iniciar
