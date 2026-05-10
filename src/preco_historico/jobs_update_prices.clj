@@ -27,7 +27,7 @@
         {:url url :status :error :msg (ex-message e)}))))
 
 (defn put-to-sleep-seconds [seconds]
-  (Thread/sleep (* 1000 seconds)))
+  (Thread/sleep (+ (* 2000 seconds) (rand-int (* 3000 seconds)))))
 
 (defn run-update-prices-job
   "Varre o banco e atualiza todos os preços monitorados."

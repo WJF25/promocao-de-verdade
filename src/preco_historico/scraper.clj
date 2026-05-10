@@ -88,7 +88,11 @@
   "Baixa a URL e extrai nome e múltiplos preços usando um mapa de seletores CSS"
   [url {:keys [site_name name price_original price_cash price_installment]}]
   (try
-    (let [response (client/get url {:headers {"User-Agent" "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+    (let [response (client/get url {:headers
+                                    {"User-Agent" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                                     "Accept" "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"
+                                     "Accept-Language" "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7"}
+                                    :throw-exceptions false
                                     :socket-timeout 5000
                                     :connection-timeout 5000
                                     :cookie-policy :ignoreCookies})
@@ -98,6 +102,7 @@
           raw-cash        (extract-text doc price_cash)
           raw-installment (extract-text doc price_installment)
           [parcelas price_installment] (parse-installment raw-installment)]
+      (tap> {:response doc})
       (tap> {:raw-original raw-original
              :raw-cash raw-cash
              :raw-installment price_installment
