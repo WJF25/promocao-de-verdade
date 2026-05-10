@@ -3,10 +3,10 @@
             [preco-historico.db :as db]
             [preco-historico.user :as user]
             [preco-historico.price-log :as price-log]
+            [preco-historico.config :as config]
             [preco-historico.scraper :as scraper]
             [preco-historico.jobs-update-prices :as jobs]
             [preco-historico.api-test :refer [api-fixture *test-ds*]]
-            [cheshire.core :as json]
             [chime.core :as chime]
             [java-time.api :as jt]))
 
@@ -172,3 +172,31 @@
         (let [handler @captured-handler]
           (is (handler (Exception. "Simulação de falha no banco")))
           (is (= true (handler (Exception. "Outra falha")))))))))
+
+(deftest main-test
+  (testing "Sucesso: O ponto de entrada CLI (-main) deve orquestrar a execução do Job"
+    (let [config-carregada (atom false)
+          ds-criado (atom false)
+          job-executado (atom nil)]
+
+      (with-redefs [config/load-config (fn [& _]
+                                         (reset! config-carregada true)
+                                         {:db-host "localhost"})
+
+                    ;; 2. Mockamos a criação do datasource para retornar um keyword fake
+                    db/make-datasource (fn [cfg]
+                                         (when (= "localhost" (:db-host cfg))
+                                           (reset! ds-criado true)
+                                           :mock-datasource))
+
+                    ;; 3. Mockamos o executor do Job para interceptar o datasource
+                    jobs/run-update-prices-job (fn [ds]
+                                                 (reset! job-executado ds)
+                                                 []) ;; Retorna lista vazia de resultados
+
+                    ;; 4. Silenciamos o output para o terminal do teste ficar limpo
+                    println (fn [& _] nil)]
+        (jobs/-main)
+        (is (true? @config-carregada) "Deveria ter carregado as configurações")
+        (is (true? @ds-criado) "Deveria ter criado o datasource com a config carregada")
+        (is (= :mock-datasource @job-executado) "O Job deveria ter sido chamado com o datasource correto")))))
