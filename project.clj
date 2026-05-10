@@ -40,7 +40,8 @@
   :profiles {:uberjar {:aot :all
                        :jvm-opts ["-Dclojure.compiler.direct-linking=true"]}
              :dev {:dependencies [[nrepl/nrepl "1.1.1"]
-                                  [org.clojure/tools.namespace "1.4.2"]]
+                                  [org.clojure/tools.namespace "1.4.2"]
+                                  [ring/ring-mock "0.4.0"]]
                    :plugins [[cider/cider-nrepl "0.47.0"]]
                    :repl-options {:port 7888
                                   :host "0.0.0.0"}
