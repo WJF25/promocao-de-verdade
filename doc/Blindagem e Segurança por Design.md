@@ -32,7 +32,7 @@ Utilizar cookies e manter uma tabela de `sessions` ativa no PostgreSQL, validand
 
 ### 3.3. Comparativo e Justificativa (Por que A e não B?)
 * **Vantagens da Solução A:** O banco de dados só é consultado no momento do Login para verificar a senha. Todas as rotas subsequentes operam de forma isolada e rápida validando apenas a assinatura matemática do JWT. Os esquemas do Malli impedem o envio de dados que não pertencem ao escopo da requisição.
-* **Desvantagens da Solução A (Trade-off):** A natureza *stateless* do JWT traz o ônus da impossibilidade de revogação nativa. Um token emitido permanece válido por todo o seu tempo de vida de 24 horas, mesmo que a senha original do usuário seja alterada no meio do caminho. Aceitamos este risco temporal para manter a arquitetura simples e de fácil escalabilidade durante a fase de prototipação da ferramenta.
+* **Desvantagens da Solução A (Trade-off):** A natureza *stateless* do JWT traz o ônus da impossibilidade de revogação nativa. Um token emitido permanece válido por todo o seu tempo de vida de 1 hora, mesmo que a senha original do usuário seja alterada no meio do caminho. Aceitamos este risco temporal para manter a arquitetura simples e de fácil escalabilidade durante a fase de prototipação da ferramenta.
 * **Por que a Solução B foi descartada:** Aumentaria exponencialmente o *overhead* de I/O (leitura) no banco de dados para cada simples consulta de preço. O JWT resolve o problema de verificação de identidade localmente através da chave secreta (`JWT_SECRET`) injetada via variáveis de ambiente.
 
 ## 4. Design Detalhado
@@ -46,8 +46,8 @@ Detalhes técnicos da solução escolhida:
 
 | Data | Decisão | Contexto / Justificativa | Status |
 | :--- | :--- | :--- | :--- |
-| --/05 | Uso de Bcrypt + SHA512 via Buddy | Alto custo computacional para hashing, dificultando ataques de força bruta | Implementado |
-| --/05 | Validação estrita com lein-cloverage | Exigir cobertura >95% especificamente em módulos críticos de Auth e Users | Implementado |
+| 10/05 | Uso de Bcrypt + SHA512 via Buddy | Alto custo computacional para hashing, dificultando ataques de força bruta | Implementado |
+| 11/05 | Validação estrita com lein-cloverage | Exigir cobertura >95% especificamente em módulos críticos de Auth e Users | Implementado |
 
 ## 6. Considerações Operacionais e de Escalabilidade
 * **Plano de Rollout e Rollback:** *[Não fornecido no texto original - preencher se necessário]*
