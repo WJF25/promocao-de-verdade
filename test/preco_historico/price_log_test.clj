@@ -47,19 +47,30 @@
       (is (= "Nintendo Switch" (:product_name row)))
       (is (uuid? (:id row))))))
 
-(deftest save-price-log!-unique-constraint-test
-  (testing "rejeita duplicidade no mesmo dia (unique constraint do Postgres)"
+(deftest save-price-log!-upsert-test
+  (testing "atualiza registro existente no mesmo dia em vez de falhar (Upsert do Postgres)"
     (let [ds *test-ds*
-          u (user/create-user! ds "price-log-dup@example.com" "secret123")
-          log {:user_id (:id u)
-               :product_name "PlayStation 5"
-               :site_name "kabum"
-               :price_original 4599.00M
-               :price_cash 4299.00M
-               :price_installment 4499.00M
-               :max_installments 12
-               :url "https://example.com/ps5"}]
-      (price-log/save-price-log! ds log)
-      (is (thrown? Exception
-                   (price-log/save-price-log! ds log))))))
+          u (user/create-user! ds "price-log-upsert@example.com" "secret123")
+          ;; 1. Estado inicial
+          log-inicial {:user_id (:id u)
+                       :product_name "PlayStation 5"
+                       :site_name "kabum"
+                       :price_original 4599.00M
+                       :price_cash 4299.00M
+                       :price_installment 4499.00M
+                       :max_installments 12
+                       :url "https://example.com/ps5"}
+
+          ;; 2. Estado alterado (simulando uma inserção manual de correção)
+          log-atualizado (assoc log-inicial :price_cash 3999.00M)]
+
+      ;; Inserimos a primeira vez
+      (price-log/save-price-log! ds log-inicial)
+
+      ;; Inserimos a segunda vez e capturamos o resultado
+      (let [resultado (price-log/save-price-log! ds log-atualizado)]
+
+        ;; 3. Verificamos se o banco adotou o novo valor!
+        (is (= 3999.00M (:price_cash resultado)))
+        (is (= "PlayStation 5" (:product_name resultado)))))))
 

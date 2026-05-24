@@ -2,6 +2,7 @@
   (:require [preco-historico.price-log :as price-log]
             [preco-historico.scraper :as scraper]
             [malli.core :as m]
+            [malli.util :as mu]
             [malli.error :as me]
             [malli.transform :as mt]
             [clojure.string :as string]))
@@ -18,6 +19,9 @@
    [:price_installment {:optional true} :double]
    [:max_installments {:optional true} :int]])
 
+(def IncomingPayloadSchema
+  (mu/optional-keys PriceLogSchema [:product_name :site_name :price_cash]))
+
 
 (defn ->transforma-body [body]
   (m/decode PriceLogSchema body (mt/transformer mt/json-transformer)))
@@ -27,12 +31,56 @@
     (when-not (m/validate PriceLogSchema body-atualizado)
       (me/humanize (m/explain PriceLogSchema body-atualizado)))))
 
+(defn- validate-payload [schema data user-id]
+  (let [decoded (m/decode schema (assoc data :user_id user-id) (mt/transformer mt/json-transformer))]
+    (when-not (m/validate schema decoded)
+      (me/humanize (m/explain schema decoded)))))
+
+(defn salva-manualmente [body datasource user-id]
+  (try
+    (let [manual-data (assoc body :user_id user-id)]
+      ;; Valida com o Schema Mestre para garantir que está completo antes do banco
+      (if-let [errors (validate-payload PriceLogSchema manual-data user-id)]
+        {:status 400 :body {:error "Dados manuais incompletos" :detalhes errors}}
+        (let [saved-record (price-log/save-price-log! datasource manual-data)]
+          {:status 201 :body saved-record})))
+    (catch Exception e
+      (if (clojure.string/includes? (ex-message e) "price_logs_user_id_product_name_site_name_captured_at_key")
+        {:status 409 :body {:error "Este produto já teve seu preço registrado hoje para este usuário."}}
+        {:status 500 :body {:error "Erro interno ao salvar preço" :msg (ex-message e)}}))))
+
+(defn salva-com-scraper [url selectors datasource user-id]
+  (let [scraped-data (scraper/fetch-product-data url selectors)]
+    (if (nil? scraped-data)
+      {:status 422 :body {:error "Não foi possível extrair os dados desta URL."}}
+      (let [record-to-save (merge {:max_installments 0}
+                                  (-> scraped-data
+                                      (update :price_installment #(or % 0.0))
+                                      (update :price_original #(or % (:price_cash scraped-data))))
+                                  {:user_id user-id})
+            erros-validacao (validate-price-log record-to-save)]
+        (tap> {:dados-to-save record-to-save
+               :tipo-dados (type (:max_installments record-to-save))})
+        (if erros-validacao
+          {:status 422 :body {:error "Dados do preço inválidos após a extração"
+                              :detalhes erros-validacao}}
+          (try
+            (let [result (price-log/save-price-log! datasource record-to-save)]
+              (tap> {:acao "Salvar Banco" :dados record-to-save})
+              {:status 201 :body result})
+            (catch Exception e
+              (if (clojure.string/includes? (ex-message e) "price_logs_user_id_product_name_site_name_captured_at_key")
+                {:status 409 :body {:error "Este produto já teve seu preço registrado hoje para este usuário."}}
+                {:status 500 :body {:error "Erro interno ao salvar preço" :msg (ex-message e)}}))))))))
+
 (defn save-price-log-handler [datasource]
   (fn [request]
-    (let [url (get-in request [:body :url])
+    (let [body (:body request)
+          url (:url body)
           identity (:identity request)
           user-id-str (:user_id identity)
-          selectors (scraper/get-selectors url)]
+          selectors (scraper/get-selectors url)
+          user-id (when identity (java.util.UUID/fromString (:user_id identity)))]
       (tap> {:identity identity
              :url url
              :selectors selectors
@@ -42,33 +90,14 @@
         {:status 400 :body {:error "URL é obrigatória"}}
         (not identity)
         {:status 401 :body {:error "Não autorizado. Token inválido ou ausente."}}
+        (validate-payload IncomingPayloadSchema body user-id)
+        {:status 400 :body {:error "Dados inválidos" :detalhes (validate-payload IncomingPayloadSchema body user-id)}}
         (not selectors)
         {:status 400 :body {:error "Loja não suportada ainda."}}
+        (:price_cash body)
+        (salva-manualmente body datasource user-id)
         :else
-        (let [scraped-data (scraper/fetch-product-data url selectors)]
-
-          (if (nil? scraped-data)
-            {:status 422 :body {:error "Não foi possível extrair os dados desta URL."}}
-            (let [user-id (java.util.UUID/fromString user-id-str)
-                  record-to-save (merge {:max_installments 0}
-                                        (-> scraped-data
-                                            (update :price_installment #(or % 0.0))
-                                            (update :price_original #(or % (:price_cash scraped-data))))
-                                        {:user_id user-id})
-                  erros-validacao (validate-price-log record-to-save)]
-              (tap> {:dados-to-save record-to-save
-                     :tipo-dados (type (:max_installments record-to-save))})
-              (if erros-validacao
-                {:status 422 :body {:error "Dados do preço inválidos após a extração"
-                                    :detalhes erros-validacao}}
-                (try
-                  (let [result (price-log/save-price-log! datasource record-to-save)]
-                    (tap> {:acao "Salvar Banco" :dados record-to-save})
-                    {:status 201 :body result})
-                  (catch Exception e
-                    (if (clojure.string/includes? (ex-message e) "price_logs_user_id_product_name_site_name_captured_at_key")
-                      {:status 409 :body {:error "Este produto já teve seu preço registrado hoje para este usuário."}}
-                      {:status 500 :body {:error "Erro interno ao salvar preço" :msg (ex-message e)}})))))))))))
+        (salva-com-scraper url selectors datasource user-id)))))
 
 
 (defn get-prices-handler [datasource]

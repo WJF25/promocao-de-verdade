@@ -101,3 +101,20 @@ SELECT DISTINCT url, site_name FROM price_logs;
 SELECT DISTINCT ON (url, user_id) url, user_id 
 FROM price_logs
 ORDER BY url, user_id;
+
+-- :name insert-price-log! :<! :1
+-- :doc Insere ou atualiza um registro de histórico de preços para o mesmo dia e produto
+INSERT INTO price_logs (
+  user_id, product_name, site_name, price_original, price_cash, price_installment, max_installments, url
+)
+VALUES (
+  :user_id, :product_name, :site_name, :price_original, :price_cash, :price_installment, :max_installments, :url
+)
+ON CONFLICT (user_id, product_name, site_name, captured_at)
+DO UPDATE SET
+  price_original = EXCLUDED.price_original,
+  price_cash = EXCLUDED.price_cash,
+  price_installment = EXCLUDED.price_installment,
+  max_installments = EXCLUDED.max_installments,
+  url = EXCLUDED.url
+RETURNING *;

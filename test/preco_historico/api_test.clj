@@ -118,7 +118,7 @@
           (is (= "Produto Mock" (:product_name body)))
           (is (string? (:user_id body))))))
 
-    (testing "Erro: Duplicidade no mesmo dia (409)"
+    (testing "Sucesso: Salva o mesmo preço só se ele for diferente, sendo igual nada acontece"
       (with-redefs [scraper/get-selectors (fn [_] {:mock "selectors"})
                     scraper/fetch-product-data (fn [url _] (assoc mock-scraped-data :url url))]
         (let [payload {:url "https://mock.com/produto-repetido"}
@@ -133,9 +133,7 @@
                                 (mock/content-type "application/json")
                                 (mock/json-body payload)))]
 
-          (is (= 409 (:status response)))
-          (is (= "Este produto já teve seu preço registrado hoje para este usuário."
-                 (get-in (json/parse-string (:body response) true) [:error]))))))
+          (is (= 201 (:status response))))))
 
     (testing "Falha: Scraper retorna nil"
       (with-redefs [scraper/get-selectors (fn [_] {:mock "selectors"})
@@ -307,3 +305,56 @@
             response (app (-> (mock/request :delete (str "/api/prices/storage/" random-id))
                               (mock/header "authorization" auth-header)))]
         (is (= 404 (:status response)))))))
+
+
+(deftest save-manual-price-api-test
+  (let [app (routes/app *test-ds* *test-cfg*)
+        email "manual@api.com"
+        password "senha123"
+        ;; 1. Criamos um usuário real no banco de teste e pegamos o token
+        user (user/create-user! *test-ds* email password)
+        token (get-login-token app email password)
+        auth-header (str "Bearer " token)
+
+        ;; Payload base para inserção manual
+        payload-manual {:url "https://amazon.com.br/produto-manual"
+                        :site_name "Amazon"
+                        :product_name "Produto Inserido Manualmente"
+                        :price_cash 150.00
+                        :price_original 200.00
+                        :price_installment 10.00
+                        :max_installments 10
+                        :user_id (:id user)}]
+
+    (testing "Sucesso: Insere um preço manualmente (bypass do scraper)"
+      (let [response (app (-> (mock/request :post "/api/prices")
+                              (mock/header "authorization" auth-header)
+                              (mock/json-body payload-manual)))
+            body (json/parse-string (:body response) true)]
+        (is (= 201 (:status response)))
+        (is (= "Produto Inserido Manualmente" (:product_name body)))
+        (is (= 150.0 (:price_cash body)))))
+
+    (testing "Sucesso: Atualiza o preço se inserido novamente no mesmo dia (O Poder do Upsert!)"
+      (let [payload-atualizado (assoc payload-manual :price_cash 120.00)
+            response (app (-> (mock/request :post "/api/prices")
+                              (mock/header "authorization" auth-header)
+                              (mock/json-body payload-atualizado)))
+            body (json/parse-string (:body response) true)]
+        ;; Aqui provamos que tirar o try/catch foi a decisão certa. 
+        ;; O banco atualizou o registro silenciosamente e retornou 201.
+        (is (= 201 (:status response)))
+        (is (= 120.0 (:price_cash body)))))
+
+    (testing "Falha: Dados manuais incompletos (aciona validação do Malli)"
+      ;; Mandamos o price_cash, mas "esquecemos" o nome do produto e a loja
+      (let [payload-incompleto {:url "https://amazon.com.br/produto-manual"
+                                :price_cash 200.00}
+            response (app (-> (mock/request :post "/api/prices")
+                              (mock/header "authorization" auth-header)
+                              (mock/json-body payload-incompleto)))
+            body (json/parse-string (:body response) true)]
+        (is (= 400 (:status response)))
+        (is (= "Dados manuais incompletos" (:error body)))
+        (is (contains? (:detalhes body) :product_name))
+        (is (contains? (:detalhes body) :site_name))))))

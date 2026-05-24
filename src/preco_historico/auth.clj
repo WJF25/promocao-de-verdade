@@ -27,7 +27,7 @@
   "Calcula o timestamp de expiração (24 horas a partir de agora)."
   []
   (-> (jt/instant)
-      (jt/plus (jt/hours 24))))
+      (jt/plus (jt/hours 1))))
 
 (defn create-token
   "Gera um JWT assinado com os dados do usuário.

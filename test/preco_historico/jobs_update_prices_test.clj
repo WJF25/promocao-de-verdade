@@ -71,16 +71,7 @@
 
 
 
-    (testing "Falha: Preço já atualizado no dia de hoje"
-      #_(price-log/save-price-log! *test-ds* {:product_name "Teste21"
-                                              :site_name "Kabom"
-                                              :price_original 710.0
-                                              :price_cash 500.0
-                                              :price_installment 930.0
-                                              :max_installments 10
-                                              :url url2
-                                              :user_id user-id})
-
+    (testing "Sucesso: Preço atualizado duas vezes no dia com sucesso"
       (with-redefs [scraper/get-selectors (fn [_] {:name "h1"})
                     scraper/fetch-product-data (fn [_ _]
                                                  {:product_name "Teste21"
@@ -93,13 +84,11 @@
                                                   :user_id user-id})
                     jobs/put-to-sleep-seconds (fn [_] nil)
                     println (fn [& _] nil)]
-        (let [results (jobs/run-update-prices-job *test-ds*)]
+        (let [results (jobs/run-update-prices-job *test-ds*)
+              history (price-log/find-by-user *test-ds* user-id)]
           (is (= 2 (count results)))
-          (is (= :skipped (:status (last results))))
-
-          ;; 3. Verificamos se agora temos 2 registros no banco para essa URL
-          (let [history (price-log/find-by-user *test-ds* user-id)]
-            (is (= 3 (count history)))))))
+          (is (= :success (:status (last results))))
+          (is (= 3 (count history))))))
 
     (testing "Falha: Falha no scraper"
       (with-redefs [scraper/get-selectors (fn [_] {:name "h1"})
