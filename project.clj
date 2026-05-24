@@ -23,7 +23,7 @@
                  [com.layerware/hugsql-adapter-next-jdbc "0.5.3" :exclusions [org.clojure/tools.logging]]
                  [djblue/portal "0.54.2"]
                  [jarohen/chime "0.3.3" :exclusions [org.clojure/tools.logging]]
-                 [lein-cloverage "1.2.4"]
+                 [lein-cloverage "1.2.4" :exclusions [org.clojure/tools.cli]]
                  [metosin/malli "0.13.0"]
                  [metosin/reitit "0.6.0" :exclusions [commons-io]]
                  [migratus "1.6.3" :exclusions [org.clojure/data.json org.clojure/tools.logging]]
